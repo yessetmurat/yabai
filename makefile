@@ -13,6 +13,7 @@ YABAI_SRC      = ./src/manifest.m $(OSAX_SRC)
 OSAX_PATH      = ./src/osax
 INFO_PLIST     = $(ASSET_PATH)/Info.plist
 BINS           = $(BUILD_PATH)/yabai
+SIGN_ID       ?= yabai-cert
 
 .PHONY: all asan tsan install man icon archive publish sign clean-build clean
 
@@ -45,7 +46,8 @@ publish:
 	sed -i '' "60s/^VERSION=.*/VERSION=\"$(shell $(BUILD_PATH)/yabai --version | cut -d "v" -f 2)\"/" $(SCRIPT_PATH)/install.sh
 	sed -i '' "61s/^EXPECTED_HASH=.*/EXPECTED_HASH=\"$(shell shasum -a 256 $(BUILD_PATH)/$(shell $(BUILD_PATH)/yabai --version).tar.gz | cut -d " " -f 1)\"/" $(SCRIPT_PATH)/install.sh
 
-archive: man install sign icon
+# man and icon need asciidoctor and PyObjC; doc/yabai.1 is checked in
+archive: install sign
 	rm -rf $(ARCH_PATH)
 	mkdir -p $(ARCH_PATH)
 	cp -r $(BUILD_PATH) $(ARCH_PATH)/
@@ -55,7 +57,7 @@ archive: man install sign icon
 	rm -rf $(ARCH_PATH)
 
 sign:
-	codesign -fs "yabai-cert" $(BUILD_PATH)/yabai
+	codesign -fs "$(SIGN_ID)" $(BUILD_PATH)/yabai
 
 clean-build:
 	rm -rf $(BUILD_PATH)
