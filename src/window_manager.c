@@ -251,16 +251,30 @@ void window_manager_center_mouse(struct window_manager *wm, struct window *windo
         }
     }
 
+    //
+    // NOTE: window->frame lags behind for a window that was just tiled (e.g. a new
+    // window still has the size the application gave it), so use the frame the
+    // layout assigned to managed windows instead.
+    //
+
+    CGRect frame = window->frame;
+    struct view *view = window_manager_find_managed_window(wm, window);
+    struct window_node *node = view ? view_find_window_node(view, window->id) : NULL;
+    if (node) {
+        struct area area = node->zoom ? node->zoom->area : node->area;
+        frame = (CGRect) {{area.x, area.y}, {area.w, area.h}};
+    }
+
     CGPoint cursor;
     SLSGetCurrentCursorLocation(g_connection, &cursor);
-    if (CGRectContainsPoint(window->frame, cursor)) return;
+    if (CGRectContainsPoint(frame, cursor)) return;
 
     uint32_t did = window_display_id(window->id);
     if (!did) return;
 
     CGPoint center = {
-        window->frame.origin.x + window->frame.size.width / 2,
-        window->frame.origin.y + window->frame.size.height / 2
+        frame.origin.x + frame.size.width / 2,
+        frame.origin.y + frame.size.height / 2
     };
 
     CGRect bounds = CGDisplayBounds(did);

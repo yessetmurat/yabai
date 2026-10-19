@@ -971,8 +971,10 @@ bool space_manager_focus_space_using_gesture(uint32_t new_did, uint64_t new_sid)
     CFRelease(event_dock_control);
 
     if (focus_display) {
+        // NOTE: see display_manager_focus_display
+        bool is_active = space_manager_active_space() == new_sid;
         display_manager_set_active_display_id(new_did);
-        if (space_manager_active_space() != new_sid) {
+        if (!is_active) {
             CGPostMouseEvent(point, false, 1, true);
             CGPostMouseEvent(point, false, 1, false);
         }

@@ -468,11 +468,19 @@ void display_manager_focus_display(uint32_t did, uint64_t sid)
         window_manager_center_mouse(&g_window_manager, window);
         display_manager_set_active_display_id(did);
     } else {
+        //
+        // NOTE: Check before changing the active menu bar display: when the focused
+        // window cannot be resolved (e.g. stale AX references after the system wakes)
+        // the active space falls back to that display, and the check would then
+        // always pass, leaving keyboard focus on the previous display.
+        //
+
+        bool is_active = space_manager_active_space() == display_space_id(did);
         CGPoint point = display_center(did);
         CGWarpMouseCursorPosition(point);
         display_manager_set_active_display_id(did);
 
-        if (space_manager_active_space() != display_space_id(did)) {
+        if (!is_active) {
             CGPostMouseEvent(point, false, 1, true);
             CGPostMouseEvent(point, false, 1, false);
         }
