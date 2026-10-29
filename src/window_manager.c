@@ -1363,6 +1363,21 @@ struct application *window_manager_focused_application(struct window_manager *wm
     return window_manager_find_application(wm, pid);
 }
 
+//
+// NOTE: Focus moved off the display |did| (or the window focused there closed) at |since|.
+// It should go back when it landed on another display shortly after.
+//
+// ponytail: fixed 1s window to pair the close with the focus change; a slow app quit can exceed it.
+//
+
+bool window_manager_should_return_focus(uint32_t did, uint32_t focused_did, uint64_t since, uint64_t now, uint64_t freq)
+{
+    if (!did || !focused_did || did == focused_did) return false;
+
+    float dt = ((float) now - since) * (1000.0f / (float)freq);
+    return dt < 1000.0f;
+}
+
 struct window *window_manager_focused_window(struct window_manager *wm)
 {
     TIME_FUNCTION;

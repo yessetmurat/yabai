@@ -33,6 +33,51 @@ static void update_window_notifications(void)
     SLSRequestNotificationsForWindows(g_connection, window_list, window_count);
 }
 
+//
+// NOTE: When the focused window on a display closes, macOS activates the next application in
+// its own order, which may live on another display. Send focus back to the display the window
+// was closed on. The close and the focus change arrive in either order: whichever comes first
+// records the display (return_focus_wid is the closing candidate when the focus change came first).
+// The cursor staying on the closed display tells a system focus change apart from a user one.
+//
+
+static inline uint32_t window_frame_display_id(struct window *window)
+{
+    return display_manager_point_display_id((CGPoint) { CGRectGetMidX(window->frame), CGRectGetMidY(window->frame) });
+}
+
+static inline void window_manager_set_return_focus(struct window_manager *wm, uint32_t did, uint32_t wid)
+{
+    wm->return_focus_did = did;
+    wm->return_focus_wid = wid;
+    wm->return_focus_time = read_os_timer();
+}
+
+static bool window_manager_return_focus(struct window_manager *wm)
+{
+    uint32_t did = wm->return_focus_did;
+    window_manager_set_return_focus(wm, 0, 0);
+
+    uint64_t sid = display_space_id(did);
+    if (!sid || !window_manager_find_window_on_space_by_rank_filtering_window(wm, sid, 1, 0)) return false;
+
+    debug("%s: %d\n", __FUNCTION__, did);
+    display_manager_focus_display(did, sid);
+    return true;
+}
+
+static void window_did_close(struct window_manager *wm, struct window *window)
+{
+    if (window->id == wm->focused_window_id) {
+        window_manager_set_return_focus(wm, window_frame_display_id(window), 0);
+    } else if (wm->return_focus_wid && window->id == wm->return_focus_wid) {
+        struct window *focused_window = window_manager_find_window(wm, wm->focused_window_id);
+        if (focused_window && window_manager_should_return_focus(wm->return_focus_did, window_frame_display_id(focused_window), wm->return_focus_time, read_os_timer(), read_os_freq())) {
+            window_manager_return_focus(wm);
+        }
+    }
+}
+
 static void window_did_receive_focus(struct window_manager *wm, struct mouse_state *ms, struct window *window)
 {
     struct window *focused_window = window_manager_find_window(wm, wm->focused_window_id);
@@ -42,8 +87,17 @@ static void window_did_receive_focus(struct window_manager *wm, struct mouse_sta
 
     window_manager_set_window_opacity(wm, window, wm->active_window_opacity);
 
+    uint32_t cursor_did = display_manager_cursor_display_id();
+    bool return_focus = !wm->return_focus_wid && ms->ffm_window_id != window->id && cursor_did == wm->return_focus_did &&
+                        window_manager_should_return_focus(wm->return_focus_did, window_frame_display_id(window), wm->return_focus_time, read_os_timer(), read_os_freq()) &&
+                        window_manager_return_focus(wm);
+    if (!return_focus) {
+        bool arm = focused_window && focused_window != window && ms->ffm_window_id != window->id && cursor_did == window_frame_display_id(focused_window);
+        window_manager_set_return_focus(wm, arm ? cursor_did : 0, arm ? focused_window->id : 0);
+    }
+
     if (wm->focused_window_id != window->id) {
-        if (ms->ffm_window_id != window->id) {
+        if (ms->ffm_window_id != window->id && !return_focus) {
             window_manager_center_mouse(wm, window);
         }
 
@@ -311,6 +365,7 @@ static EVENT_HANDLER(APPLICATION_TERMINATED)
 
         window_manager_remove_scratchpad_for_window(&g_window_manager, window, false);
         window_manager_remove_window(&g_window_manager, window->id);
+        window_did_close(&g_window_manager, window);
         window_unobserve(window);
         window_destroy(window);
     }
@@ -625,6 +680,7 @@ static EVENT_HANDLER(WINDOW_DESTROYED)
 
     window_manager_remove_scratchpad_for_window(&g_window_manager, window, false);
     window_manager_remove_window(&g_window_manager, window->id);
+    window_did_close(&g_window_manager, window);
     window_unobserve(window);
     window_destroy(window);
 

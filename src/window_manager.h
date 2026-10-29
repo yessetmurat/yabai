@@ -87,6 +87,9 @@ struct window_manager
     uint32_t focused_window_id;
     ProcessSerialNumber focused_window_psn;
     uint32_t last_window_id;
+    uint32_t return_focus_did;
+    uint32_t return_focus_wid;
+    uint64_t return_focus_time;
     bool enable_mff;
     enum ffm_mode ffm_mode;
     enum purify_mode purify_mode;
@@ -149,6 +152,7 @@ struct window *window_manager_find_second_cousin_for_managed_window(struct windo
 void window_manager_focus_window_without_raise(ProcessSerialNumber *window_psn, uint32_t window_id);
 void window_manager_focus_window_with_raise(ProcessSerialNumber *window_psn, uint32_t window_id, AXUIElementRef window_ref);
 struct window *window_manager_focused_window(struct window_manager *wm);
+bool window_manager_should_return_focus(uint32_t did, uint32_t focused_did, uint64_t since, uint64_t now, uint64_t freq);
 struct application *window_manager_focused_application(struct window_manager *wm);
 struct view *window_manager_find_managed_window(struct window_manager *wm, struct window *window);
 void window_manager_remove_managed_window(struct window_manager *wm, uint32_t wid);
